@@ -1,19 +1,29 @@
 #Import required libraries/modules
-import sys
 import socket
 
 #target_host = 127.0.0.1  # Localhost IP address
 #port_range = 1-1024  # Port range to scan
 
 #Prompt the user for the target host and port range
-target_host = input("Enter the target host (IP address or hostname): ")
-port_range = input("Enter the port range (e.g., 1-65535): ").split('-')
-# Convert the port range to integers
-port_range = [int(port_range[0]), int(port_range[1])]
-# Check if the port range is valid and if not, exit the program
-if port_range[0] < 1 or port_range[1] > 65535 or port_range[0] > port_range[1]:
-    print("Invalid port range. Please enter a valid range (1-65535).")
-    sys.exit() 
+def beginning():
+    while True:
+        try:
+            target_host = input("Enter the target host (IP address or hostname): ")
+            port_range = input("Enter the port range (e.g., 1-65535): ").split('-')
+            # Check if the port range contains exactly two elements and valid numeric values before converting to integers
+            if len(port_range) != 2 or not port_range[0].isdigit() or not port_range[1].isdigit():
+                print("Invalid input. Please enter a valid port range in the format 'start-end' with numeric values.")
+                continue
+            # Convert the port range to integers
+            port_range = [int(port_range[0]), int(port_range[1])]
+            # Check if the port range is valid
+            if port_range[0] < 1 or port_range[1] > 65535 or port_range[0] > port_range[1]:
+                print("Invalid port range. Please enter a valid range (1-65535).")
+                continue
+            break
+        except ValueError:
+            print("Invalid input. Please enter numeric values for the port range.")
+    return target_host, port_range
 
 # Define the port_scanner function
 def port_scanner(target_host, port_range):
@@ -46,5 +56,6 @@ def port_scanner(target_host, port_range):
         # Close the socket connection if it is still open
             s.close()
 
-#Run the port_scanner function
+#Run the beginning function to prompt user input
+target_host, port_range = beginning()
 port_scanner(target_host, port_range)
