@@ -5,15 +5,6 @@ import socket
 host = "127.0.0.1"  # Localhost IP address
 port = 6000  # Port number to connect to
 
-# Display current target host and port
-print(f"Current host: {host}, Current target port: {port}")
-
-# Ask user if they want to change the port (if yes, prompt for new values).
-change_target = input("Do you want to change the port? (yes/no): ").strip().lower()
-if change_target == "yes":
-	port_input = input("Enter new port (default is 6000): ").strip()
-	port = int(port_input) if port_input.isdigit() else 6000
-
 # Create a socket that will use IPv4 addressing and TCP protocol
 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
