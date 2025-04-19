@@ -14,8 +14,6 @@ if change_target == "yes":
 	port_input = input("Enter new port (default is 6000): ").strip()
 	port = int(port_input) if port_input.isdigit() else 6000
 
-
-
 # Create a socket that will use IPv4 addressing and TCP protocol
 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 

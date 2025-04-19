@@ -1,10 +1,10 @@
-#Import required libraries/modules
+# Import required libraries/modules
 import socket
 
 #target_host = 127.0.0.1  # Localhost IP address
 #port_range = 1-1024  # Port range to scan
 
-#Prompt the user for the target host and port range
+# Prompt the user for the target host and port range
 def beginning():
     while True:
         try:
@@ -20,9 +20,12 @@ def beginning():
             if port_range[0] < 1 or port_range[1] > 65535 or port_range[0] > port_range[1]:
                 print("Invalid port range. Please enter a valid range (1-65535).")
                 continue
+            #exit the loop if the input is valid
             break
+        # Handle unexpected errors during the input process and display an error message
         except ValueError:
             print("Invalid input. Please enter numeric values for the port range.")
+    # Return the validated target host and port range
     return target_host, port_range
 
 # Define the port_scanner function
@@ -56,6 +59,7 @@ def port_scanner(target_host, port_range):
         # Close the socket connection if it is still open
             s.close()
 
-#Run the beginning function to prompt user input
+# Run the beginning function to prompt user input
 target_host, port_range = beginning()
+# Run the port_scanner function with validated the user input
 port_scanner(target_host, port_range)
