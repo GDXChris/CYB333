@@ -1,72 +1,154 @@
 # Import Libraries
 import datetime
 import os
-import sys
+import ctypes
+import getpass
+import shutil
+import hashlib
+from cryptography.fernet import Fernet
 
-# Prompt user for username and password
+# Prompt user for username and password (use Windows authentication system)
+def authenticate_user(username, password):
+    """Authenticate user using Windows authentication."""
+    LOGON32_LOGON_INTERACTIVE = 2
+    LOGON32_PROVIDER_DEFAULT = 0
 
-# Verify the username and password against a secure authentication system
-# If the username and password are valid, proceed with the backup process
-# If the username and password are invalid, prompt the user to re-enter them
-# If the user fails to enter valid credentials after a certain number of attempts, exit the script
+    # Call Windows API to validate credentials
+    handle = ctypes.c_void_p()
+    try:
+        success = ctypes.windll.advapi32.LogonUserW(
+            username, None, password, LOGON32_LOGON_INTERACTIVE, LOGON32_PROVIDER_DEFAULT, ctypes.byref(handle)
+        )
+        if not success:
+            error_code = ctypes.windll.kernel32.GetLastError()
+            print(f"Authentication failed. Error code: {error_code}. Ensure the script is run with administrative privileges.")
+    except Exception as e:
+        print(f"An unexpected error occurred during authentication: {e}")
+        success = False
+    if success:
+        ctypes.windll.kernel32.CloseHandle(handle)
+        return True
+    else:
+        return False
 
+# Loop until the user provides valid input or chooses to exit
+while True:
+    username = input("Enter your username: ")
+    password = getpass.getpass("Enter your password: ")  # Hides password input
+    if authenticate_user(username, password):
+        print("Authentication successful. Proceeding with the backup process.")
+        break
+    else:
+        print("Authentication failed. Please try again. Ensure the script is run with administrative privileges.")
+
+# Define the backup process function
+def perform_backup():
+    """Perform the backup process."""
+    # Prompt the user for the backup destination and the user directory to be backed up
+    backup_destination = input("Enter the backup destination path: ").strip()
+    user_directory = input("Enter the user directory to be backed up: ").strip()
+
+    # Verify the backup destination
+    if not os.path.exists(backup_destination):
+        try:
+            os.makedirs(backup_destination, exist_ok=True)
+            print(f"Backup destination did not exist. Created the directory: {backup_destination}")
+        except Exception as e:
+            print(f"Failed to create backup destination. Error: {e}")
+            return
+
+    # Prompt the user for scheduled backup time and frequency
+    scheduled_time = input("Enter the scheduled backup time (HH:MM): ").strip()
+    frequency = input("Enter the backup frequency (daily/weekly/monthly): ").strip().lower()
+
+    # Validate the scheduled backup time and frequency
+    if frequency not in ['daily', 'weekly', 'monthly']:
+        print("Invalid backup frequency. Exiting the script.")
+        return
+
+    # Define the path to the user directory to be backed up
+    if not os.path.exists(user_directory):
+        print("Invalid user directory. Exiting the script.")
+        return
+
+    # Recognize the folders and contents in the user directory
+    files_to_backup = []
+    for root, dirs, files in os.walk(user_directory):
+        for file in files:
+            file_path = os.path.join(root, file)
+            files_to_backup.append(file_path)
+
+    # Check for modification dates and do not back up files that have not been modified since the last backup
+    last_backup_time = datetime.datetime.now() - datetime.timedelta(days=1)  # Example: 1 day ago
+    files_to_backup = [f for f in files_to_backup if datetime.datetime.fromtimestamp(os.path.getmtime(f)) > last_backup_time]
+
+    # Calculate the size of the files to be backed up
+    total_size = sum(os.path.getsize(f) for f in files_to_backup)
+    print(f"Total size of files to be backed up: {total_size / (1024 * 1024):.2f} MB")
+
+    # Prompt the user for confirmation to proceed with the backup
+    confirm = input("Do you want to proceed with the backup? (yes/no): ").strip().lower()
+    if confirm != 'yes':
+        print("Backup process aborted.")
+        return
+
+    # Create a backup directory with the current date and time
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    backup_dir = os.path.join(backup_destination, f"backup_{timestamp}")
+    os.makedirs(backup_dir, exist_ok=True)
+
+    # Encrypt the files to be backed up using a symmetric encryption algorithm (e.g., AES)
+    encryption_key = Fernet.generate_key()
+    cipher = Fernet(encryption_key)
+    key_file = os.path.join(backup_dir, "encryption_key.key")
+    with open(key_file, "wb") as kf:
+        kf.write(encryption_key)
+
+    # Use a secure hashing algorithm (e.g., SHA-256) to generate a hash of the files to be backed up
+    for file in files_to_backup:
+        try:
+            with open(file, "rb") as f:
+                file_data = f.read()
+                encrypted_data = cipher.encrypt(file_data)
+                file_hash = hashlib.sha256(file_data).hexdigest()
+
+            # Save the encrypted file to the backup directory
+            relative_path = os.path.relpath(file, user_directory)
+            backup_file_path = os.path.join(backup_dir, relative_path)
+            os.makedirs(os.path.dirname(backup_file_path), exist_ok=True)
+            with open(backup_file_path, "wb") as bf:
+                bf.write(encrypted_data)
+
+            print(f"Backed up: {file} (SHA-256: {file_hash})")
+        except Exception as e:
+            print(f"Error backing up {file}: {e}")
+
+    # Log the backup process
+    log_file = os.path.join(backup_dir, "backup_log.txt")
+    with open(log_file, "w") as lf:
+        lf.write(f"Backup completed on {datetime.datetime.now()}\n")
+        lf.write(f"Total size: {total_size / (1024 * 1024):.2f} MB\n")
+        lf.write(f"Backup directory: {backup_dir}\n")
+
+    print("Backup process completed successfully.")
+    print(f"Backup files are located at: {backup_dir}")
 
 # Prompt the user if they want to perform a backup or restore
-# If the user chooses to perform a backup, proceed with the backup process
-# If the user chooses to perform a restore, proceed with the restore process
-# If the user chooses to exit, exit the script
-
-#Define logging destionation path and log file name for backup and restore process logs
-
-# BACKUP PROCESS ---------------------------------------------------------------------------
-
-# Prompt the user for the backup destination and the user directory to be backed up
-
-# Verify the backup destination against a secure authentication system
-# If the backup destination is valid, proceed with the backup process
-# If the backup destination is invalid, exit the script
-
-
-# Prompt the user for scheduled backup time and frequency
-
-# Validate the scheduled backup time and frequency
-# If the scheduled backup time and frequency are valid, proceed with the backup process
-# If the scheduled backup time and frequency are invalid, exit the script
-
-
-# Define the path to the user directory to be backed up
-
-# Recognize the folders and contents in the user directory
-
-# Check for modification dates and do not back up files that have not been modified since the last backup
-
-# Calculate the size of the files to be backed up
-
-
-# Print the size of the files to be backed up and prompt the user for confirmation to proceed with the backup
-# If the user confirms, proceed with the backup
-# If the user does not confirm, exit the script
-
-
-# Create a backup directory with the current date and time
-
-#Encrypt the files to be backed up using a symmetric encryption algorithm (e.g., AES)
-# Use a secure key management system to store the encryption keys securely
-# Use a secure hashing algorithm (e.g., SHA-256) to generate a hash of the files to be backed up
-
-# Progress indicator to show the status of the backup process
-# Use a secure file transfer protocol (e.g., SFTP) to transfer the files to the backup destination
-# Print a running list of the files being backed up and their sizes
-# Print any errors encountered during the backup process, including files that could not be backed up
-# Log the backup process, including the start and end times, the size of the files backed up, and any errors encountered during the backup process
-
-
-#Print backup completion status and the location of the backup files
-
-
-# General Error handling
-# If the backup fails, log the error and notify the user
-
+while True:
+    print("1. Backup")
+    print("2. Restore")
+    print("3. Exit")
+    choice = input("Enter your choice (1/2/3): ").strip()
+    if choice == '1':
+        perform_backup()
+    elif choice == '2':
+        # Placeholder for restore process
+        print("PLACEHOLDER: Restore process not implemented yet.")
+    elif choice == '3':
+        print("Exiting the program.")
+        break
+    else:
+        print("Invalid choice. Please try again.")
 
 # RESTORE PROCESS --------------------------------------------------------------------------
 # Prompt the user for the backup file to restore and the destination directory
@@ -77,12 +159,12 @@ import sys
 # If the user fails to enter a valid backup file after a certain number of attempts, exit the script
 
 
-#Prompt the user for the restore directory password and verify it against a secure authentication system
+# Prompt the user for the restore directory password and verify it against a secure authentication system
 # If the restore directory password is valid, proceed with the restore process
 # If the restore directory password is invalid, exit the script
 
 
-#Start the restore process and log the start time
+# Start the restore process and log the start time
 # Use a secure file transfer protocol (e.g., SFTP) to transfer the files from the backup destination to the restore directory
 # Use a secure hashing algorithm (e.g., SHA-256) to verify the integrity of the files being restored
 # Decrypt the files being restored using a symmetric encryption algorithm (e.g., AES)
