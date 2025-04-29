@@ -193,7 +193,7 @@ def restore_backup():
     for original_path in files_to_restore:
         try:
             # Determine the relative path and locate the encrypted file in the backup directory
-            relative_path = os.path.relpath(original_path, start=user_directory)
+            relative_path = os.path.relpath(original_path, start=os.path.abspath(user_directory))
             encrypted_file_path = os.path.join(backup_dir, relative_path)
 
             if not os.path.exists(encrypted_file_path):
