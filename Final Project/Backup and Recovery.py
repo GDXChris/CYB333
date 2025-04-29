@@ -76,6 +76,7 @@ def perform_backup():
     for root, dirs, files in os.walk(user_directory):
         for file in files:
             file_path = os.path.join(root, file)
+            print(f"Detected file: {file_path}")
             files_to_backup.append(file_path)
 
     # Check for modification dates and do not back up files that have not been modified since the last backup
@@ -113,7 +114,7 @@ def perform_backup():
                 file_hash = hashlib.sha256(file_data).hexdigest()
 
             # Save the encrypted file to the backup directory
-            relative_path = os.path.relpath(file, user_directory)
+            relative_path = os.path.relpath(file, start=user_directory)
             backup_file_path = os.path.join(backup_dir, relative_path)
             os.makedirs(os.path.dirname(backup_file_path), exist_ok=True)
             with open(backup_file_path, "wb") as bf:
@@ -129,88 +130,91 @@ def perform_backup():
         lf.write(f"Backup completed on {datetime.datetime.now()}\n")
         lf.write(f"Total size: {total_size / (1024 * 1024):.2f} MB\n")
         lf.write(f"Backup directory: {backup_dir}\n")
+        for file in files_to_backup:
+            file_hash = hashlib.sha256(open(file, "rb").read()).hexdigest()
+            lf.write(f"{file}: {file_hash}\n")  # Store absolute path        
 
     print("Backup process completed successfully.")
     print(f"Backup files are located at: {backup_dir}")
 
 # RESTORE PROCESS --------------------------------------------------------------------------
 def restore_backup():
-    """Restore the backup process."""
-    # Prompt the user for the backup directory to restore
-    backup_dir = input("Enter the path to the backup directory: ").strip()
+    """Restore files from a backup."""
+    # Prompt the user for the backup directory
+    backup_dir = input("Enter the backup directory path: ").strip()
 
-    # Verify the backup directory exists
+    # Verify the backup directory
     if not os.path.exists(backup_dir):
-        print(f"Backup directory '{backup_dir}' does not exist. Please check the path and try again.")
+        print("Invalid backup directory. Exiting the script.")
         return
 
-    # Locate the encryption key file in the backup directory
+    # Prompt the user for the original user directory
+    user_directory = input("Enter the original user directory path: ").strip()
+
+    # Verify the user directory
+    if not os.path.exists(user_directory):
+        print("Invalid user directory. Exiting the script.")
+        return
+
+    # Locate the encryption key file
     key_file = os.path.join(backup_dir, "encryption_key.key")
     if not os.path.exists(key_file):
-        print(f"Encryption key file not found in {backup_dir}. Cannot proceed with the restoration process.")
+        print("Encryption key file not found in the backup directory. Exiting the script.")
         return
 
     # Load the encryption key
-    with open(key_file, "rb") as kf:
-        encryption_key = kf.read()
-    cipher = Fernet(encryption_key)
-
-    # Verify the integrity of the backup files using the log file
-    log_file = os.path.join(backup_dir, "backup_log.txt")
-    if not os.path.exists(log_file):
-        print("Backup log file not found. Cannot verify integrity.")
+    try:
+        with open(key_file, "rb") as kf:
+            encryption_key = kf.read()
+        cipher = Fernet(encryption_key)
+    except Exception as e:
+        print(f"Failed to load encryption key. Error: {e}")
         return
 
-    # Read the hash values from the log file
-    file_hashes = {}
-    with open(log_file, "r") as lf:
-        for line in lf:
-            if "SHA-256" in line:
-                parts = line.split(":")
-                if len(parts) == 2:
-                    file_path, file_hash = parts[0].strip(), parts[1].strip()
-                    file_hashes[file_path] = file_hash
+    # Locate the backup log file
+    log_file = os.path.join(backup_dir, "backup_log.txt")
+    if not os.path.exists(log_file):
+        print("Backup log file not found in the backup directory. Exiting the script.")
+        return
 
-    # Restore the files
-    restored_files_count = 0
-    for relative_path, expected_hash in file_hashes.items():
+    # Read the log file to get the list of files and their original paths
+    files_to_restore = []
+    try:
+        with open(log_file, "r") as lf:
+            for line in lf:
+                if line.strip() and ":" in line:
+                    original_path, _ = line.split(":", 1)
+                    files_to_restore.append(original_path.strip())
+    except Exception as e:
+        print(f"Failed to read the backup log file. Error: {e}")
+        return
+
+    # Restore each file
+    for original_path in files_to_restore:
         try:
-            backup_file_path = os.path.join(backup_dir, relative_path)
-            if not os.path.exists(backup_file_path):
-                print(f"Backup file '{backup_file_path}' is missing. Skipping.")
+            # Determine the relative path and locate the encrypted file in the backup directory
+            relative_path = os.path.relpath(original_path, start=user_directory)
+            encrypted_file_path = os.path.join(backup_dir, relative_path)
+
+            if not os.path.exists(encrypted_file_path):
+                print(f"Encrypted file not found: {encrypted_file_path}. Skipping.")
                 continue
 
-            # Verify file integrity
-            with open(backup_file_path, "rb") as bf:
-                encrypted_data = bf.read()
-                actual_hash = hashlib.sha256(cipher.decrypt(encrypted_data)).hexdigest()
-                if actual_hash != expected_hash:
-                    print(f"Integrity check failed for {backup_file_path}. File may be corrupted.")
-                    continue
+            # Decrypt the file
+            with open(encrypted_file_path, "rb") as ef:
+                encrypted_data = ef.read()
+                decrypted_data = cipher.decrypt(encrypted_data)
 
-            # Decrypt and restore the file
-            original_file_path = os.path.abspath(relative_path)  # Adjust this as needed
-            if not os.path.exists(original_file_path):  # Check if the file is missing from the original directory
-                os.makedirs(os.path.dirname(original_file_path), exist_ok=True)
-                with open(original_file_path, "wb") as of:
-                    of.write(cipher.decrypt(encrypted_data))
+            # Restore the file to its original location
+            os.makedirs(os.path.dirname(original_path), exist_ok=True)
+            with open(original_path, "wb") as of:
+                of.write(decrypted_data)
 
-                print(f"Restored: {relative_path} to {original_file_path}")
-                restored_files_count += 1
-            else:
-                print(f"File already exists: {original_file_path}. Skipping restoration.")
+            print(f"Restored: {original_path}")
         except Exception as e:
-            print(f"Error restoring {relative_path}: {e}")
+            print(f"Error restoring {original_path}: {e}")
 
-    # Log the restore process
-    restore_log_file = os.path.join(backup_dir, "restore_log.txt")
-    with open(restore_log_file, "w") as rlf:
-        lf.write(f"Restore completed on {datetime.datetime.now()}\n")
-        lf.write(f"Restored {restored_files_count} files.\n")
-        lf.write(f"Restore directory: {backup_dir}\n")
-
-    print(f"Restoration process completed successfully. {restored_files_count} files restored.")
-
+    print("Restore process completed successfully.")
 
 # Prompt the user if they want to perform a backup or restore
 while True:
