@@ -133,6 +133,85 @@ def perform_backup():
     print("Backup process completed successfully.")
     print(f"Backup files are located at: {backup_dir}")
 
+# RESTORE PROCESS --------------------------------------------------------------------------
+def restore_backup():
+    """Restore the backup process."""
+    # Prompt the user for the backup directory to restore
+    backup_dir = input("Enter the path to the backup directory: ").strip()
+
+    # Verify the backup directory exists
+    if not os.path.exists(backup_dir):
+        print(f"Backup directory '{backup_dir}' does not exist. Please check the path and try again.")
+        return
+
+    # Locate the encryption key file in the backup directory
+    key_file = os.path.join(backup_dir, "encryption_key.key")
+    if not os.path.exists(key_file):
+        print(f"Encryption key file not found in {backup_dir}. Cannot proceed with the restoration process.")
+        return
+
+    # Load the encryption key
+    with open(key_file, "rb") as kf:
+        encryption_key = kf.read()
+    cipher = Fernet(encryption_key)
+
+    # Verify the integrity of the backup files using the log file
+    log_file = os.path.join(backup_dir, "backup_log.txt")
+    if not os.path.exists(log_file):
+        print("Backup log file not found. Cannot verify integrity.")
+        return
+
+    # Read the hash values from the log file
+    file_hashes = {}
+    with open(log_file, "r") as lf:
+        for line in lf:
+            if "SHA-256" in line:
+                parts = line.split(":")
+                if len(parts) == 2:
+                    file_path, file_hash = parts[0].strip(), parts[1].strip()
+                    file_hashes[file_path] = file_hash
+
+    # Restore the files
+    restored_files_count = 0
+    for relative_path, expected_hash in file_hashes.items():
+        try:
+            backup_file_path = os.path.join(backup_dir, relative_path)
+            if not os.path.exists(backup_file_path):
+                print(f"Backup file '{backup_file_path}' is missing. Skipping.")
+                continue
+
+            # Verify file integrity
+            with open(backup_file_path, "rb") as bf:
+                encrypted_data = bf.read()
+                actual_hash = hashlib.sha256(cipher.decrypt(encrypted_data)).hexdigest()
+                if actual_hash != expected_hash:
+                    print(f"Integrity check failed for {backup_file_path}. File may be corrupted.")
+                    continue
+
+            # Decrypt and restore the file
+            original_file_path = os.path.abspath(relative_path)  # Adjust this as needed
+            if not os.path.exists(original_file_path):  # Check if the file is missing from the original directory
+                os.makedirs(os.path.dirname(original_file_path), exist_ok=True)
+                with open(original_file_path, "wb") as of:
+                    of.write(cipher.decrypt(encrypted_data))
+
+                print(f"Restored: {relative_path} to {original_file_path}")
+                restored_files_count += 1
+            else:
+                print(f"File already exists: {original_file_path}. Skipping restoration.")
+        except Exception as e:
+            print(f"Error restoring {relative_path}: {e}")
+
+    # Log the restore process
+    restore_log_file = os.path.join(backup_dir, "restore_log.txt")
+    with open(restore_log_file, "w") as rlf:
+        lf.write(f"Restore completed on {datetime.datetime.now()}\n")
+        lf.write(f"Restored {restored_files_count} files.\n")
+        lf.write(f"Restore directory: {backup_dir}\n")
+
+    print(f"Restoration process completed successfully. {restored_files_count} files restored.")
+
+
 # Prompt the user if they want to perform a backup or restore
 while True:
     print("1. Backup")
@@ -142,18 +221,20 @@ while True:
     if choice == '1':
         perform_backup()
     elif choice == '2':
-        # Placeholder for restore process
-        print("PLACEHOLDER: Restore process not implemented yet.")
+        restore_backup()
     elif choice == '3':
         print("Exiting the program.")
         break
     else:
         print("Invalid choice. Please try again.")
 
-# RESTORE PROCESS --------------------------------------------------------------------------
-# Prompt the user for the backup file to restore and the destination directory
 
-# Verify the backup file against a secure authentication system
+
+    # Placeholder for verifying the backup file against a secure authentication system
+    # This could involve checking a digital signature or hash value
+
+# Verify the backup file against a secure authentication system        
+
 # If the backup file is valid, proceed with the restore process
 # If the backup file is invalid, prompt the user to re-enter the backup file
 # If the user fails to enter a valid backup file after a certain number of attempts, exit the script
