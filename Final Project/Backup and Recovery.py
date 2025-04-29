@@ -182,9 +182,22 @@ def restore_backup():
     try:
         with open(log_file, "r") as lf:
             for line in lf:
-                if line.strip() and ":" in line:
-                    original_path, _ = line.split(":", 1)
-                    files_to_restore.append(original_path.strip())
+                line = line.strip()
+                if not line or ":" not in line:
+                    continue
+                if line.lower().startswith("backup completed on") or line.lower().startswith("total size") or line.lower().startswith("backup directory"):
+                    continue
+                try:
+                    # Split only on the last colon to avoid splitting the "C:\..." drive
+                    path_part, hash_part = line.rsplit(":", 1)
+                    files_to_restore.append(path_part.strip())
+                except ValueError:
+                    print(f"Could not parse line: {line}")
+    except FileNotFoundError:
+        print("Log file not found.")
+
+                  
+
     except Exception as e:
         print(f"Failed to read the backup log file. Error: {e}")
         return
