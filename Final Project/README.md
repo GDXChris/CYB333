@@ -1,5 +1,4 @@
-### Python-based Backup and Recovery Script
-
+## Python-based Backup and Recovery Script
 Core Objectives:<br/>
 -Create a script that can securely interact with the Windows filesystem<br/>
 -Enforce strong authentication to restrict file access to authorized users (DO NOT RUN AS ADMINISTRATOR)<br/>
